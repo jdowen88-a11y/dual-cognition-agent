@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "binaiui-runtime"
+version = "0.1.0"
+description = "Resumable Ram/Opal recursive research loop grounded in BINAIUI source lineage"
+requires-python = ">=3.10"
+
+[project.scripts]
+binaiui = "binaiui_runtime.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
