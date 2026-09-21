@@ -4,9 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "binaiui-runtime"
-version = "0.1.0"
-description = "Resumable Ram/Opal recursive research loop grounded in BINAIUI source lineage"
+version = "0.2.0"
+description = "Portable resumable Ram/Opal runtime grounded in BINAIUI source lineage"
 requires-python = ">=3.10"
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
 
 [project.scripts]
 binaiui = "binaiui_runtime.cli:main"
