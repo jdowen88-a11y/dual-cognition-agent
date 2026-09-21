@@ -117,9 +117,19 @@ def ingest_github(
 
     count = 0
     for repo in metadata:
+        # GitHub reports an empty repository with size 0 and no usable branch/tree.
+        if int(repo.get("size") or 0) == 0:
+            continue
         full_name = str(repo["full_name"])
         branch = str(repo.get("default_branch") or "main")
-        for item in reader.tree(full_name, branch):
+        try:
+            tree = reader.tree(full_name, branch)
+        except RuntimeError:
+            # A repo can exist without a commit, have a transiently unavailable
+            # default branch, or be visible in metadata without readable contents.
+            # One such repo must not abort the rest of the snapshot.
+            continue
+        for item in tree:
             if item.get("type") != "blob":
                 continue
             path = str(item.get("path", ""))
@@ -128,7 +138,10 @@ def ingest_github(
                 continue
             if any(part in SKIP_DIRS for part in Path(path).parts):
                 continue
-            content = reader.blob_text(full_name, str(item["sha"]))
+            try:
+                content = reader.blob_text(full_name, str(item["sha"]))
+            except RuntimeError:
+                continue
             if content is None:
                 continue
             store.upsert_source(repo=full_name, path=path, content=content, priority=_priority(full_name))
