@@ -1,8 +1,6 @@
 # BINAIUI Ram / Opal Runtime
 
-A resumable dual-cognition runner built from the existing BINAIUI and related repository lineage.
-
-The loop is deliberately simple and inspectable:
+A **portable, resumable, self-contained** dual-cognition runner grounded in the BINAIUI repository lineage.
 
 ```text
 observe → measure → encode → hash → reproduce → falsify
@@ -11,52 +9,103 @@ observe → measure → encode → hash → reproduce → falsify
                               └──── journal + source refs ────→ next cycle
 ```
 
-**RAM proposes. OPAL checks. Both outputs remain in history.** Each turn records the exact source refs and hashes used. An interrupted run resumes from the last OPAL output rather than restarting from zero.
+**RAM proposes. OPAL checks. Both survive.** Every turn stores hashes and source references. A stopped process resumes from the last OPAL output instead of rebuilding the conversation from zero.
 
-## Source behavior
+## What now lives outside any temporary chat/work session
 
-- BINAIUI is retrieval priority 100.
-- Every other repository is priority 10.
-- Text sources are stored in a local SQLite database under `.binaiui/` and are ignored by Git.
-- Private repository contents are never copied into this Git repository by default.
-- The runtime can ingest a directory of cloned repos or read repositories through GitHub's API when `BINAIUI_GITHUB_TOKEN` is present.
+- **Source memory:** SQLite under `.binaiui/state.sqlite3`
+- **Corpus identity:** deterministic SHA-512 over the exact source manifest
+- **Long-term journal:** run/cycle/agent/output history
+- **Resume:** stable `run_id` continues from the last stored output
+- **Portable transfer:** compressed snapshot/restore of source memory + journals
+- **Health check:** database integrity, corpus identity, credential presence
+- **Validation:** dependency-light deterministic backend + GitHub CI
+- **Source hierarchy:** BINAIUI priority `100`; other repositories priority `10`
 
-## External-action boundary
+Private repository text stays in the local runtime database or an explicitly-created snapshot. It is not copied into this Git repository by normal ingestion.
 
-The cognition loop only reads source text and appends to its own journal. Model output is **never** evaluated as code and is never routed into trading, deployments, account changes, messages, shell commands, or money movement. That preserves the existing "do not turn the key automatically" rule while letting the internal Ram/Opal exchange continue.
-
-## Run
+## One-command bootstrap
 
 ```bash
 python -m pip install -e .
 
-# Import every owned GitHub repo visible to a read token.
-export BINAIUI_GITHUB_TOKEN='...'
-binaiui ingest-github --owner jdowen88-a11y
+export BINAIUI_GITHUB_TOKEN='READ_TOKEN'
+binaiui bootstrap --smoke
+```
 
-# Use any OpenAI Chat-Completions-compatible endpoint.
+That enumerates the owned GitHub repositories, imports readable text, prioritizes **BINAIUI**, computes a reproducible corpus hash, and runs one deterministic Ram/Opal cycle to verify journal + resume plumbing.
+
+Inspect it:
+
+```bash
+binaiui doctor
+binaiui corpus
+binaiui status
+```
+
+## Run the actual paired loop
+
+Use any Chat-Completions-compatible endpoint:
+
+```bash
 export BINAIUI_API_BASE='https://api.openai.com/v1'
 export BINAIUI_API_KEY='...'
 export BINAIUI_MODEL='YOUR_MODEL_ID'
 
-# Start a bounded run.
 binaiui run 'Continue from the BINAIUI corpus without restarting.' --cycles 8 --run-id main
+```
 
-# Resume the same run later.
+Resume later with the **same** run id:
+
+```bash
 binaiui run 'resume' --cycles 8 --run-id main
+```
 
-# Explicitly opt into an uninterrupted process in an environment that stays alive.
+The new seed does not overwrite an existing run's stored continuation; the journal resumes from its latest output.
+
+For an environment intentionally kept alive:
+
+```bash
 binaiui run 'continue' --run-id main --forever --sleep 30
 ```
 
-For a no-network proof that ingestion, hashing, journaling, and resume work:
+## Move the memory between pipes
+
+Create a compressed portable bundle:
+
+```bash
+binaiui snapshot
+```
+
+Restore it elsewhere:
+
+```bash
+binaiui restore .binaiui/binaiui.snapshot.json.gz --replace
+```
+
+The snapshot contains **source contents and journal contents**, including material ingested from private repositories. Treat it as private data. The default path remains inside `.binaiui/`, which Git ignores.
+
+## No-network proof
 
 ```bash
 binaiui ingest-local ../BINAIUI
 binaiui run 'test seed' --cycles 2 --run-id test --deterministic
-binaiui status --run-id test
+binaiui run 'resume' --cycles 1 --run-id test --deterministic
+binaiui corpus
 ```
 
-## Why this repo is private
+## External-action boundary
 
-The runtime is intended to learn from the full repository set, including private repositories. Keeping the runner private avoids accidentally publishing source names, excerpts, journals, or derived context. The canonical BINAIUI source repository can remain public while this runtime stays private.
+The cognition loop reads source text and writes only its own memory/journal. Model output is **never evaluated as code** and is not silently routed into trading, deployment, account changes, messages, shell execution, or money movement.
+
+That carries forward the existing project rule:
+
+```text
+DO NOT TURN THE KEY AUTOMATICALLY.
+```
+
+Internal generation can continue freely without turning an internal thought into an external side effect.
+
+## Why this repository stays private
+
+The runtime is designed to learn across the full repository set, including private repositories. Keeping the runner private reduces the chance of publishing source names, excerpts, journals, or derived context. The canonical BINAIUI source repository can remain public while this runtime and its state remain private.
