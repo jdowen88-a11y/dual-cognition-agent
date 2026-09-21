@@ -1,4 +1,4 @@
-"""SQLite-backed source memory and resumable journal."""
+"""SQLite-backed source memory, corpus identity, and resumable journal."""
 
 from __future__ import annotations
 
@@ -10,6 +10,9 @@ from pathlib import Path
 import re
 import sqlite3
 from typing import Iterable
+
+
+SNAPSHOT_SCHEMA = 1
 
 
 def utcnow() -> str:
@@ -104,6 +107,27 @@ class MemoryStore:
     def source_count(self) -> int:
         return int(self.db.execute("SELECT COUNT(*) FROM sources").fetchone()[0])
 
+    def repo_counts(self) -> dict[str, int]:
+        rows = self.db.execute(
+            "SELECT repo, COUNT(*) AS n FROM sources GROUP BY repo ORDER BY repo"
+        ).fetchall()
+        return {str(row["repo"]): int(row["n"]) for row in rows}
+
+    def corpus_hash(self) -> str:
+        rows = self.db.execute(
+            "SELECT source_id,sha512,priority FROM sources ORDER BY source_id"
+        ).fetchall()
+        manifest = [
+            {"source_id": row["source_id"], "sha512": row["sha512"], "priority": row["priority"]}
+            for row in rows
+        ]
+        canonical = json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return digest(canonical)
+
+    def integrity_check(self) -> str:
+        row = self.db.execute("PRAGMA integrity_check").fetchone()
+        return str(row[0]) if row else "unknown"
+
     def search(self, query: str, *, limit: int = 8) -> list[SourceHit]:
         q = tokens(query)
         rows = self.db.execute(
@@ -194,3 +218,57 @@ class MemoryStore:
     def turns(self, run_id: str) -> list[dict]:
         rows = self.db.execute("SELECT * FROM turns WHERE run_id=? ORDER BY id", (run_id,)).fetchall()
         return [dict(r) for r in rows]
+
+    def snapshot_payload(self) -> dict:
+        sources = [dict(r) for r in self.db.execute("SELECT * FROM sources ORDER BY source_id").fetchall()]
+        runs = [dict(r) for r in self.db.execute("SELECT * FROM runs ORDER BY run_id").fetchall()]
+        turns = [dict(r) for r in self.db.execute("SELECT * FROM turns ORDER BY id").fetchall()]
+        return {
+            "schema": SNAPSHOT_SCHEMA,
+            "created_at": utcnow(),
+            "corpus_hash": self.corpus_hash(),
+            "sources": sources,
+            "runs": runs,
+            "turns": turns,
+        }
+
+    def restore_payload(self, payload: dict, *, replace: bool = False) -> None:
+        if int(payload.get("schema", 0)) != SNAPSHOT_SCHEMA:
+            raise ValueError("unsupported snapshot schema")
+        sources = list(payload.get("sources", []))
+        runs = list(payload.get("runs", []))
+        turns = list(payload.get("turns", []))
+        with self.db:
+            if replace:
+                self.db.execute("DELETE FROM turns")
+                self.db.execute("DELETE FROM runs")
+                self.db.execute("DELETE FROM sources")
+            for row in sources:
+                self.db.execute(
+                    """INSERT OR REPLACE INTO sources(source_id,repo,path,sha512,content,priority,updated_at)
+                       VALUES(?,?,?,?,?,?,?)""",
+                    (
+                        row["source_id"], row["repo"], row["path"], row["sha512"],
+                        row["content"], row["priority"], row["updated_at"],
+                    ),
+                )
+            for row in runs:
+                self.db.execute(
+                    """INSERT OR REPLACE INTO runs(run_id,seed,status,cycle,last_output,last_hash,created_at,updated_at)
+                       VALUES(?,?,?,?,?,?,?,?)""",
+                    (
+                        row["run_id"], row["seed"], row["status"], row["cycle"],
+                        row.get("last_output"), row.get("last_hash"),
+                        row["created_at"], row["updated_at"],
+                    ),
+                )
+            for row in turns:
+                self.db.execute(
+                    """INSERT OR REPLACE INTO turns(id,run_id,cycle,phase,agent,input_hash,output_hash,content,refs_json,created_at)
+                       VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        row["id"], row["run_id"], row["cycle"], row["phase"], row["agent"],
+                        row["input_hash"], row["output_hash"], row["content"],
+                        row["refs_json"], row["created_at"],
+                    ),
+                )
