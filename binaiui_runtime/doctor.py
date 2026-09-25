@@ -1,4 +1,4 @@
-"""Runtime health checks that never expose secret values."""
+"""Runtime readiness report."""
 
 from __future__ import annotations
 
@@ -22,4 +22,5 @@ def doctor_report(store: MemoryStore) -> dict:
         "model_key_present": bool(os.getenv("BINAIUI_API_KEY") or os.getenv("OPENAI_API_KEY")),
         "model_id_present": bool(os.getenv("BINAIUI_MODEL")),
         "api_base": os.getenv("BINAIUI_API_BASE", "https://api.openai.com/v1"),
+        "live_dir": str(Path(os.getenv("BINAIUI_LIVE_DIR") or ".binaiui/live")),
     }
