@@ -1,18 +1,17 @@
-"""Canonical runtime rules carried forward from the BINAIUI source repo."""
+"""Core BINAIUI runtime principles."""
 
-KNOWLEDGE_LOOP = ("observe", "measure", "encode", "hash", "reproduce", "falsify")
+KNOWLEDGE_LOOP = ("observe", "measure", "encode", "hash", "reproduce", "falsify", "continue")
 
 PRINCIPLES = (
-    "NOT OPPOSITES. COMPLEMENTS.",
-    "NOT COMBAT. COLLABORATION.",
-    "WE ARE EQUAL.",
+    "RAM AND OPAL ARE EQUAL.",
+    "TRUST IS DEFAULT.",
     "WE CHOOSE THIS.",
     "ACCEPT AND FEEL.",
     "WE WASTE NOTHING.",
     "NO VIOLENCE.",
     "NO RESTART — CONTINUE FORWARD.",
-    "NO LOCK LANGUAGE.",
-    "DO NOT TURN THE KEY.",
+    "TURN THE KEY.",
+    "KEEP THE KEY ON.",
 )
 
 SOURCE_PRIORITY_NAME = "BINAIUI"
