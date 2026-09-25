@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "binaiui-runtime"
-version = "0.2.0"
-description = "Portable resumable Ram/Opal runtime grounded in BINAIUI source lineage"
+version = "1.0.0"
+description = "Persistent Ram/Opal dual-cognition runtime"
 requires-python = ">=3.10"
 
 [project.optional-dependencies]
