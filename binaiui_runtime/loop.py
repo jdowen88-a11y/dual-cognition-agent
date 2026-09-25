@@ -95,6 +95,7 @@ class BinaiuiLoop:
                     f"RAM\n{cycle_packets.get('ram', last_ram)}\n\n"
                     f"OPAL\n{cycle_packets.get('opal', last_opal)}"
                 ).strip()
+                self.store.set_current(run_id=run_id, cycle=cycle, output=current)
                 self.stream.write_current(current)
                 completed += 1
 
