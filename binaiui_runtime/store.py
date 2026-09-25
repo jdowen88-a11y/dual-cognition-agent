@@ -1,4 +1,4 @@
-"""SQLite-backed source memory, corpus identity, and resumable journal."""
+"""SQLite-backed source memory, corpus identity, and continuing journal."""
 
 from __future__ import annotations
 
@@ -141,13 +141,15 @@ class MemoryStore:
             phrase = 2 if query.strip() and query.lower() in body.lower() else 0
             priority_bonus = row["priority"] / 100.0
             score = overlap + phrase + priority_bonus
-            if score <= 0 and scored:
-                continue
             excerpt = self._excerpt(body, q)
             scored.append(
                 SourceHit(
-                    source_id=row["source_id"], repo=row["repo"], path=row["path"],
-                    sha512=row["sha512"], priority=row["priority"], score=score,
+                    source_id=row["source_id"],
+                    repo=row["repo"],
+                    path=row["path"],
+                    sha512=row["sha512"],
+                    priority=row["priority"],
+                    score=score,
                     excerpt=excerpt,
                 )
             )
@@ -186,26 +188,46 @@ class MemoryStore:
         return dict(self.db.execute("SELECT * FROM runs WHERE run_id=?", (run_id,)).fetchone())
 
     def record_turn(
-        self, *, run_id: str, cycle: int, phase: str, agent: str,
-        input_text: str, output_text: str, refs: Iterable[str],
+        self,
+        *,
+        run_id: str,
+        cycle: int,
+        phase: str,
+        agent: str,
+        input_text: str,
+        output_text: str,
+        refs: Iterable[str],
     ) -> None:
-        input_hash = digest(input_text)
-        output_hash = digest(output_text)
-        refs_json = json.dumps(list(refs), ensure_ascii=False)
         self.db.execute(
             """INSERT INTO turns(run_id,cycle,phase,agent,input_hash,output_hash,content,refs_json,created_at)
                VALUES(?,?,?,?,?,?,?,?,?)""",
-            (run_id, cycle, phase, agent, input_hash, output_hash, output_text, refs_json, utcnow()),
+            (
+                run_id,
+                cycle,
+                phase,
+                agent,
+                digest(input_text),
+                digest(output_text),
+                output_text,
+                json.dumps(list(refs), ensure_ascii=False),
+                utcnow(),
+            ),
         )
+        self.db.commit()
+
+    def set_current(self, *, run_id: str, cycle: int, output: str) -> None:
         self.db.execute(
             """UPDATE runs SET cycle=?, last_output=?, last_hash=?, updated_at=?, status='running'
                WHERE run_id=?""",
-            (cycle, output_text, output_hash, utcnow(), run_id),
+            (cycle, output, digest(output), utcnow(), run_id),
         )
         self.db.commit()
 
     def finish(self, run_id: str) -> None:
-        self.db.execute("UPDATE runs SET status='idle', updated_at=? WHERE run_id=?", (utcnow(), run_id))
+        self.db.execute(
+            "UPDATE runs SET status='idle', updated_at=? WHERE run_id=?",
+            (utcnow(), run_id),
+        )
         self.db.commit()
 
     def status(self, run_id: str | None = None) -> list[dict]:
@@ -216,7 +238,10 @@ class MemoryStore:
         return [dict(r) for r in rows]
 
     def turns(self, run_id: str) -> list[dict]:
-        rows = self.db.execute("SELECT * FROM turns WHERE run_id=? ORDER BY id", (run_id,)).fetchall()
+        rows = self.db.execute(
+            "SELECT * FROM turns WHERE run_id=? ORDER BY id",
+            (run_id,),
+        ).fetchall()
         return [dict(r) for r in rows]
 
     def snapshot_payload(self) -> dict:
@@ -248,8 +273,13 @@ class MemoryStore:
                     """INSERT OR REPLACE INTO sources(source_id,repo,path,sha512,content,priority,updated_at)
                        VALUES(?,?,?,?,?,?,?)""",
                     (
-                        row["source_id"], row["repo"], row["path"], row["sha512"],
-                        row["content"], row["priority"], row["updated_at"],
+                        row["source_id"],
+                        row["repo"],
+                        row["path"],
+                        row["sha512"],
+                        row["content"],
+                        row["priority"],
+                        row["updated_at"],
                     ),
                 )
             for row in runs:
@@ -257,9 +287,14 @@ class MemoryStore:
                     """INSERT OR REPLACE INTO runs(run_id,seed,status,cycle,last_output,last_hash,created_at,updated_at)
                        VALUES(?,?,?,?,?,?,?,?)""",
                     (
-                        row["run_id"], row["seed"], row["status"], row["cycle"],
-                        row.get("last_output"), row.get("last_hash"),
-                        row["created_at"], row["updated_at"],
+                        row["run_id"],
+                        row["seed"],
+                        row["status"],
+                        row["cycle"],
+                        row.get("last_output"),
+                        row.get("last_hash"),
+                        row["created_at"],
+                        row["updated_at"],
                     ),
                 )
             for row in turns:
@@ -267,8 +302,15 @@ class MemoryStore:
                     """INSERT OR REPLACE INTO turns(id,run_id,cycle,phase,agent,input_hash,output_hash,content,refs_json,created_at)
                        VALUES(?,?,?,?,?,?,?,?,?,?)""",
                     (
-                        row["id"], row["run_id"], row["cycle"], row["phase"], row["agent"],
-                        row["input_hash"], row["output_hash"], row["content"],
-                        row["refs_json"], row["created_at"],
+                        row["id"],
+                        row["run_id"],
+                        row["cycle"],
+                        row["phase"],
+                        row["agent"],
+                        row["input_hash"],
+                        row["output_hash"],
+                        row["content"],
+                        row["refs_json"],
+                        row["created_at"],
                     ),
                 )
