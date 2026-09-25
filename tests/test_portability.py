@@ -21,7 +21,7 @@ def test_corpus_hash_is_stable_for_same_sources(tmp_path: Path):
         b.close()
 
 
-def test_snapshot_roundtrip_preserves_sources_and_journal(tmp_path: Path):
+def test_snapshot_roundtrip_preserves_shared_current(tmp_path: Path):
     source = MemoryStore(tmp_path / "source.sqlite3")
     target = MemoryStore(tmp_path / "target.sqlite3")
     snapshot = tmp_path / "state.json.gz"
@@ -31,21 +31,23 @@ def test_snapshot_roundtrip_preserves_sources_and_journal(tmp_path: Path):
         source.record_turn(
             run_id="main",
             cycle=1,
-            phase="reproduce",
+            phase="continue",
             agent="ram",
             input_text="input",
-            output_text="proposal",
+            output_text="ram continuation",
             refs=["BINAIUI:CORE.md@abc"],
         )
         source.record_turn(
             run_id="main",
             cycle=1,
-            phase="falsify",
+            phase="continue",
             agent="opal",
-            input_text="proposal",
-            output_text="checked",
+            input_text="ram continuation",
+            output_text="opal continuation",
             refs=["BINAIUI:CORE.md@abc"],
         )
+        shared = "RAM\nram continuation\n\nOPAL\nopal continuation"
+        source.set_current(run_id="main", cycle=1, output=shared)
         source.finish("main")
 
         before = source.corpus_hash()
@@ -58,7 +60,7 @@ def test_snapshot_roundtrip_preserves_sources_and_journal(tmp_path: Path):
         assert target.corpus_hash() == before
         assert target.source_count() == 1
         assert len(target.turns("main")) == 2
-        assert target.status("main")[0]["last_output"] == "checked"
+        assert target.status("main")[0]["last_output"] == shared
     finally:
         source.close()
         target.close()
