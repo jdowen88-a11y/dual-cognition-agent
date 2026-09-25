@@ -1,4 +1,4 @@
-"""Pluggable model backends. No model output is executed as code or an external action."""
+"""Pluggable model backends for BINAIUI."""
 
 from __future__ import annotations
 
@@ -45,10 +45,12 @@ class OpenAICompatibleModel:
         return str(data["choices"][0]["message"]["content"])
 
 
+@dataclass
 class DeterministicModel:
-    """Dependency-free test/fallback backend; useful for proving resume and journal logic."""
+    counter: int = 0
 
     def complete(self, *, system: str, user: str) -> str:
-        marker = "RAM" if "RAM" in system.upper() else "OPAL"
-        compact = " ".join(user.split())
-        return f"[{marker}] {compact[:900]}"
+        self.counter += 1
+        voice = "opal" if "You are OPAL" in system else "ram"
+        text = f"{voice.upper()} deterministic continuation {self.counter}"
+        return json.dumps({"voice": voice, "text": text, "next_seed": text}, ensure_ascii=False)
